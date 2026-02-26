@@ -4,6 +4,7 @@ INPUT_MOVIE="$1"
 MOVIE_NAME="${MOVIE_NAME:-}"
 MOVIE_YEAR="${MOVIE_YEAR:-}"
 TMDB_API_KEY="${TMDB_API_KEY:-}"
+SUBDL_API_KEY="${SUBDL_API_KEY:-}"
 C_RED=196
 
 c_echo() {
@@ -18,6 +19,7 @@ die() {
 }
 
 [[ -z "$TMDB_API_KEY" ]] && die "Required TMDB_API_KEY. Read the docs: https://developer.themoviedb.org/docs/getting-started."
+[[ -z "$SUBDL_API_KEY" ]] && die "Required SUBDL_API_KEY. Read the docs: https://subdl.com/api-doc."
 
 parse_movie() {
   local file name year
@@ -42,7 +44,6 @@ req_get_id() {
   local movie_name="$2"
   local movie_year="$3"
 
-  local response
   response=$(curl -sG "https://api.themoviedb.org/3/search/movie" \
     --data-urlencode "api_key=${api_key}" \
     --data-urlencode "query=${movie_name}" \
@@ -61,7 +62,7 @@ req_get_id() {
         (.overview[0:120] | gsub("\n"; " "))
       ]
     | join(" | ")
-    ' | fzf --header "Select Movie (Sorted by Votes)" \
+    ' | fzf --header "Select Movie (Sorted by Votes): Movie Name | Year | Description" \
     --delimiter ' \| ' \
     --with-nth "2.." \
     --preview-window=hidden) ||
@@ -70,11 +71,42 @@ req_get_id() {
   echo "$selection" | awk -F ' \\| ' '{print $1}'
 }
 
+req_get_sub_url() {
+  local api_key="$1" tmdb_id="$2"
+  local response selection
+
+  response=$(curl -sG "https://api.subdl.com/api/v1/subtitles" \
+    --data-urlencode "api_key=$api_key" \
+    --data-urlencode "tmdb_id=$tmdb_id" \
+    --data-urlencode "type=movie" \
+    --data-urlencode "languages=EN")
+
+  selection=$(echo "$response" | jq -r '
+    if .status == true then
+      .subtitles[] | [
+        .url,
+        .release_name,
+        .language,
+        .subtitlePage,
+        .author
+      ] | join(" | ")
+    else
+      empty
+    end
+  ' | fzf -m --header "Select Subtitle: Release | Language | Page | Author" \
+    --delimiter ' \| ' \
+    --with-nth "2.." \
+    --preview-window=hidden) || return 1
+
+  echo "$selection" | awk -F ' \\| ' '{print "https://dl.subdl.com" $1}'
+}
+
 [[ -n "$INPUT_MOVIE" ]] && parse_movie "$INPUT_MOVIE"
 
 [[ -z "$MOVIE_NAME" ]] && die "Empty MOVIE_NAME. Must be a string like 'Inception'."
 [[ -z "$MOVIE_YEAR" ]] && die "Empty MOVIE_YEAR. Must be an integer like 2010."
 
-ID=$(req_get_id "$TMDB_API_KEY" "$MOVIE_NAME" "$MOVIE_YEAR") || die "No selection made."
+TMDB_ID=$(req_get_id "$TMDB_API_KEY" "$MOVIE_NAME" "$MOVIE_YEAR") || die "No selection made."
 
-echo "$ID"
+SUB_URL=$(req_get_sub_url "$SUBDL_API_KEY" "$TMDB_ID") || die "No subtitle selected."
+echo "$SUB_URL"
