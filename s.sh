@@ -29,14 +29,14 @@ parse_movie() {
   if [[ "$file" =~ ^(.*[^0-9])?((19|20)[0-9]{2}) ]]; then
     name="${BASH_REMATCH[1]}"
     year="${BASH_REMATCH[2]}"
-
-    # cleanup
-    name="$(echo "$name" | tr '._()[]-' ' ')"
-    name=$(echo "$name" | xargs)
-
-    MOVIE_NAME="$name"
-    MOVIE_YEAR="$year"
+  else
+    name="${file%.*}"
+    year=""
   fi
+
+  # cleanup
+  MOVIE_NAME="$(echo "$name" | tr '._()[]-' ' ' | xargs)"
+  MOVIE_YEAR="$year"
 }
 
 req_get_id() {
@@ -113,7 +113,6 @@ download_subs() {
 [[ -n "$INPUT_MOVIE" ]] && parse_movie "$INPUT_MOVIE"
 
 [[ -z "$MOVIE_NAME" ]] && die "Empty MOVIE_NAME. Must be a string like 'Inception'."
-[[ -z "$MOVIE_YEAR" ]] && die "Empty MOVIE_YEAR. Must be an integer like 2010."
 
 TMDB_ID=$(req_get_id "$TMDB_API_KEY" "$MOVIE_NAME" "$MOVIE_YEAR") || die "No selection made."
 
