@@ -3,6 +3,7 @@
 INPUT_MOVIE="$1"
 MOVIE_NAME="${MOVIE_NAME:-}"
 MOVIE_YEAR="${MOVIE_YEAR:-}"
+TMDB_API_KEY="${TMDB_API_KEY:-}"
 C_RED=196
 
 c_echo() {
@@ -15,6 +16,8 @@ die() {
   c_echo "$C_RED" "Error: $1 Exiting..."
   exit 1
 }
+
+[[ -z "$TMDB_API_KEY" ]] && die "Required TMDB_API_KEY. Read the docs: https://developer.themoviedb.org/docs/getting-started."
 
 parse_movie() {
   local file name year
@@ -34,6 +37,23 @@ parse_movie() {
   fi
 }
 
+req_get_id() {
+  local api_key="$1"
+  local movie_name="$2"
+  local movie_year="$3"
+
+  local response
+  response=$(curl -sG "https://api.themoviedb.org/3/search/movie" \
+    --data-urlencode "api_key=${api_key}" \
+    --data-urlencode "query=${movie_name}" \
+    --data-urlencode "year=${movie_year}" \
+    --data-urlencode "include_adult=false" \
+    --data-urlencode "language=en-US" \
+    --data-urlencode "page=1")
+
+  echo "$response" | jq -r '.results[0].id // empty'
+}
+
 [[ -n "$INPUT_MOVIE" ]] && parse_movie "$INPUT_MOVIE"
 
 [[ -z "$MOVIE_NAME" ]] && die "Empty MOVIE_NAME. Must be a string like 'Inception'."
@@ -41,3 +61,5 @@ parse_movie() {
 
 echo "$MOVIE_NAME"
 echo "$MOVIE_YEAR"
+
+req_get_id "$TMDB_API_KEY" "$MOVIE_NAME" "$MOVIE_YEAR"
