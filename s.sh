@@ -101,6 +101,15 @@ req_get_sub_url() {
   echo "$selection" | awk -F ' \\| ' '{print "https://dl.subdl.com" $1}'
 }
 
+download_subs() {
+  for url in $1; do
+    echo "Downloading and extracting: $url"
+    curl -sLO "$url" &&
+      unzip -oq "${url##*/}" &&
+      rm "${url##*/}"
+  done
+}
+
 [[ -n "$INPUT_MOVIE" ]] && parse_movie "$INPUT_MOVIE"
 
 [[ -z "$MOVIE_NAME" ]] && die "Empty MOVIE_NAME. Must be a string like 'Inception'."
@@ -109,4 +118,5 @@ req_get_sub_url() {
 TMDB_ID=$(req_get_id "$TMDB_API_KEY" "$MOVIE_NAME" "$MOVIE_YEAR") || die "No selection made."
 
 SUB_URL=$(req_get_sub_url "$SUBDL_API_KEY" "$TMDB_ID") || die "No subtitle selected."
-echo "$SUB_URL"
+
+download_subs "$SUB_URL"
