@@ -51,7 +51,23 @@ req_get_id() {
     --data-urlencode "language=en-US" \
     --data-urlencode "page=1")
 
-  echo "$response" | jq -r '.results[0].id // empty'
+  selection=$(echo "$response" | jq -r '
+    .results
+    | sort_by(.vote_count) | reverse | .[]
+    | [
+        .id,
+        .title,
+        (.release_date[0:4] // "N/A"),
+        (.overview[0:120] | gsub("\n"; " "))
+      ]
+    | join(" | ")
+    ' | fzf --header "Select Movie (Sorted by Votes)" \
+    --delimiter ' \| ' \
+    --with-nth "2.." \
+    --preview-window=hidden) ||
+    return 1
+
+  echo "$selection" | awk -F ' \\| ' '{print $1}'
 }
 
 [[ -n "$INPUT_MOVIE" ]] && parse_movie "$INPUT_MOVIE"
@@ -59,7 +75,6 @@ req_get_id() {
 [[ -z "$MOVIE_NAME" ]] && die "Empty MOVIE_NAME. Must be a string like 'Inception'."
 [[ -z "$MOVIE_YEAR" ]] && die "Empty MOVIE_YEAR. Must be an integer like 2010."
 
-echo "$MOVIE_NAME"
-echo "$MOVIE_YEAR"
+ID=$(req_get_id "$TMDB_API_KEY" "$MOVIE_NAME" "$MOVIE_YEAR") || die "No selection made."
 
-req_get_id "$TMDB_API_KEY" "$MOVIE_NAME" "$MOVIE_YEAR"
+echo "$ID"
