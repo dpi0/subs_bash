@@ -20,6 +20,7 @@ die() {
 
 [[ -z "$TMDB_API_KEY" ]] && die "Required TMDB_API_KEY. Read the docs: https://developer.themoviedb.org/docs/getting-started."
 [[ -z "$SUBDL_API_KEY" ]] && die "Required SUBDL_API_KEY. Read the docs: https://subdl.com/api-doc."
+[[ -f "$INPUT_MOVIE" ]] && DEST_DIR=$(dirname "$INPUT_MOVIE")
 
 parse_movie() {
   local file name year
@@ -102,11 +103,14 @@ req_get_sub_url() {
 }
 
 download_subs() {
-  for url in $1; do
+  local urls="$1"
+  local dest_dir="${2:-.}"
+  for url in $urls; do
+    local zip_file="${url##*/}"
     echo "Downloading and extracting: $url"
     curl -sLO "$url" &&
-      unzip -oq "${url##*/}" &&
-      rm "${url##*/}"
+      unzip -oqj "$zip_file" -d "$dest_dir" &&
+      rm "$zip_file"
   done
 }
 
@@ -118,4 +122,4 @@ TMDB_ID=$(req_get_id "$TMDB_API_KEY" "$MOVIE_NAME" "$MOVIE_YEAR") || die "No sel
 
 SUB_URL=$(req_get_sub_url "$SUBDL_API_KEY" "$TMDB_ID") || die "No subtitle selected."
 
-download_subs "$SUB_URL"
+download_subs "$SUB_URL" "$DEST_DIR"
