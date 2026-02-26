@@ -18,6 +18,7 @@ die() {
   exit 1
 }
 
+for cmd in curl jq fzf awk unzip; do command -v "$cmd" >/dev/null 2>&1 || die "$cmd is not installed."; done
 [[ -z "$TMDB_API_KEY" ]] && die "Required TMDB_API_KEY. Read the docs: https://developer.themoviedb.org/docs/getting-started."
 [[ -z "$SUBDL_API_KEY" ]] && die "Required SUBDL_API_KEY. Read the docs: https://subdl.com/api-doc."
 [[ -f "$INPUT_MOVIE" ]] && DEST_DIR=$(dirname "$INPUT_MOVIE")
