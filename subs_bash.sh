@@ -5,16 +5,10 @@ MOVIE_NAME="${MOVIE_NAME:-}"
 MOVIE_YEAR="${MOVIE_YEAR:-}"
 TMDB_API_KEY="${TMDB_API_KEY:-}"
 SUBDL_API_KEY="${SUBDL_API_KEY:-}"
-C_RED=196
-
-c_echo() {
-  local code="$1"
-  shift
-  printf "$(tput setaf "$code")%s$(tput sgr0)\n" "$*"
-}
+C_RED='\e[31m'
 
 die() {
-  c_echo "$C_RED" "Error: $1 Exiting..."
+  printf "${C_RED}Error: %s Exiting...${C_RESET}\n" "$1" >&2
   exit 1
 }
 
