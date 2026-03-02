@@ -1,7 +1,17 @@
 #!/usr/bin/env bash
 
+help() {
+  cat <<EOF
+Usage: $(basename "$0") <movie-name|movie-file-path>
+EOF
+}
+
+[[ $# -eq 0 ]] && {
+  help
+  exit 1
+}
+
 INPUT_MOVIE="$1"
-MOVIE_NAME="${MOVIE_NAME:-}"
 MOVIE_YEAR="${MOVIE_YEAR:-}"
 TMDB_API_KEY="${TMDB_API_KEY:-}"
 SUBDL_API_KEY="${SUBDL_API_KEY:-}"
@@ -13,26 +23,24 @@ die() {
 }
 
 for cmd in curl jq fzf awk unzip; do command -v "$cmd" >/dev/null 2>&1 || die "$cmd is not installed."; done
+[[ -f "$INPUT_MOVIE" ]] && DEST_DIR=$(dirname "$INPUT_MOVIE")
 [[ -z "$TMDB_API_KEY" ]] && die "Required TMDB_API_KEY. Read the docs: https://developer.themoviedb.org/docs/getting-started."
 [[ -z "$SUBDL_API_KEY" ]] && die "Required SUBDL_API_KEY. Read the docs: https://subdl.com/api-doc."
-[[ -f "$INPUT_MOVIE" ]] && DEST_DIR=$(dirname "$INPUT_MOVIE")
 
 parse_movie() {
-  local file name year
-  file="${1##*/}"
+  local filename="${1##*/}"                           # extract only filename from path (can use basename "$1" as well)
+  local match_pattern='^(.*[^0-9])?((19|20)[0-9]{2})' # to split filename in 2 parts, 1 = everything before year & 2 = year
 
-  # look for the first 4-digit year (19xx or 20xx)
-  if [[ "$file" =~ ^(.*[^0-9])?((19|20)[0-9]{2}) ]]; then
-    name="${BASH_REMATCH[1]}"
-    year="${BASH_REMATCH[2]}"
-  else
-    name="${file%.*}"
-    year=""
+  if [[ "$filename" =~ $match_pattern ]]; then
+    local name="${BASH_REMATCH[1]}"
+    local year="${BASH_REMATCH[2]}"
+  else                          # when no year was present in the filename, we use just the movie name (mostly enough for TMDB)
+    local name="${filename%.*}" # remove atleast the extension from filename
+    local year=""
   fi
 
-  # cleanup
-  MOVIE_NAME="$(echo "$name" | tr '._()[]-' ' ' | xargs)"
-  MOVIE_YEAR="$year"
+  name="${name//[._()\[\]-]/ }" # replace (./_/()/[]/- with single space -- cleaning up movie name)
+  echo "$name|$year"
 }
 
 req_get_id() {
@@ -109,11 +117,13 @@ download_subs() {
   done
 }
 
-[[ -n "$INPUT_MOVIE" ]] && parse_movie "$INPUT_MOVIE"
+IFS="|" read -r movie_name movie_year <<<"$(parse_movie "$INPUT_MOVIE")"
 
-[[ -z "$MOVIE_NAME" ]] && die "Empty MOVIE_NAME. Must be a string like 'Inception'."
+[[ -n "$MOVIE_YEAR" ]] || MOVIE_YEAR="$movie_year"
 
-TMDB_ID=$(req_get_id "$TMDB_API_KEY" "$MOVIE_NAME" "$MOVIE_YEAR") || die "No selection made."
+[[ -z "$movie_name" ]] && die "Empty MOVIE_NAME. Must be a string like 'Inception' or 'The Prestige'."
+
+TMDB_ID=$(req_get_id "$TMDB_API_KEY" "$movie_name" "$MOVIE_YEAR") || die "No selection made."
 
 SUB_URL=$(req_get_sub_url "$SUBDL_API_KEY" "$TMDB_ID") || die "No subtitle selected."
 
