@@ -1,5 +1,8 @@
 #!/usr/bin/env bash
 
+# shellcheck source=/dev/null
+[[ -f "$(dirname "$0")/.env" ]] && source "$(dirname "$0")/.env"
+
 help() {
   cat <<EOF
 Usage: $(basename "$0") <movie-name|movie-file-path>
