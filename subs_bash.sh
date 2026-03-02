@@ -15,7 +15,9 @@ INPUT_MOVIE="$1"
 MOVIE_YEAR="${MOVIE_YEAR:-}"
 TMDB_API_KEY="${TMDB_API_KEY:-}"
 SUBDL_API_KEY="${SUBDL_API_KEY:-}"
+DEST_DIR="${DEST_DIR:-.}" # Use $PWD is no destination directory specified
 C_RED='\e[31m'
+C_RESET='\e[0m'
 
 die() {
   printf "${C_RED}Error: %s Exiting...${C_RESET}\n" "$1" >&2
@@ -105,7 +107,7 @@ get_sub_url() {
 }
 
 download_subs() {
-  local urls="$1" dest_dir="${2:-.}"
+  local urls="$1" dest_dir="$2"
   for url in $urls; do
     local zip_file="${url##*/}"
     echo "Downloading and extracting: $url"
