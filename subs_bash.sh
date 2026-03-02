@@ -43,10 +43,8 @@ parse_movie() {
   echo "$name|$year"
 }
 
-req_get_id() {
-  local api_key="$1"
-  local movie_name="$2"
-  local movie_year="$3"
+get_tmdb_id() {
+  local api_key="$1" movie_name="$2" movie_year="$3"
 
   response=$(curl -sG "https://api.themoviedb.org/3/search/movie" \
     --data-urlencode "api_key=${api_key}" \
@@ -56,6 +54,7 @@ req_get_id() {
     --data-urlencode "language=en-US" \
     --data-urlencode "page=1")
 
+  # sort the array by .vote_count and extract 4 fields from each item - id, title, release date, overview and pass this to fzf
   selection=$(echo "$response" | jq -r '
     .results
     | sort_by(.vote_count) | reverse | .[]
@@ -75,9 +74,8 @@ req_get_id() {
   echo "$selection" | awk -F ' \\| ' '{print $1}'
 }
 
-req_get_sub_url() {
-  local api_key="$1" tmdb_id="$2"
-  local response selection
+get_sub_url() {
+  local api_key="$1" tmdb_id="$2" response selection
 
   response=$(curl -sG "https://api.subdl.com/api/v1/subtitles" \
     --data-urlencode "api_key=$api_key" \
@@ -85,6 +83,7 @@ req_get_sub_url() {
     --data-urlencode "type=movie" \
     --data-urlencode "languages=EN")
 
+  # from the subtitles array, extract 4 items - download url, name, language, subdl page url, author and pass this to fzf
   selection=$(echo "$response" | jq -r '
     if .status == true then
       .subtitles[] | [
@@ -106,8 +105,7 @@ req_get_sub_url() {
 }
 
 download_subs() {
-  local urls="$1"
-  local dest_dir="${2:-.}"
+  local urls="$1" dest_dir="${2:-.}"
   for url in $urls; do
     local zip_file="${url##*/}"
     echo "Downloading and extracting: $url"
@@ -121,10 +119,8 @@ IFS="|" read -r movie_name movie_year <<<"$(parse_movie "$INPUT_MOVIE")"
 
 [[ -n "$MOVIE_YEAR" ]] || MOVIE_YEAR="$movie_year"
 
-[[ -z "$movie_name" ]] && die "Empty MOVIE_NAME. Must be a string like 'Inception' or 'The Prestige'."
+tmdb_id=$(get_tmdb_id "$TMDB_API_KEY" "$movie_name" "$MOVIE_YEAR") || die "No selection made."
 
-TMDB_ID=$(req_get_id "$TMDB_API_KEY" "$movie_name" "$MOVIE_YEAR") || die "No selection made."
+subdl_url=$(get_sub_url "$SUBDL_API_KEY" "$tmdb_id") || die "No subtitle selected."
 
-SUB_URL=$(req_get_sub_url "$SUBDL_API_KEY" "$TMDB_ID") || die "No subtitle selected."
-
-download_subs "$SUB_URL" "$DEST_DIR"
+download_subs "$subdl_url" "$DEST_DIR"
