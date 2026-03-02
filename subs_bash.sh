@@ -18,7 +18,7 @@ INPUT_MOVIE="$1"
 MOVIE_YEAR="${MOVIE_YEAR:-}"
 TMDB_API_KEY="${TMDB_API_KEY:-}"
 SUBDL_API_KEY="${SUBDL_API_KEY:-}"
-DEST_DIR="${DEST_DIR:-.}" # Use $PWD is no destination directory specified
+DEST_DIR="${DEST_DIR:-.}" # Use $PWD if no destination directory specified
 C_RED='\e[31m'
 C_RESET='\e[0m'
 
@@ -51,13 +51,18 @@ parse_movie() {
 get_tmdb_id() {
   local api_key="$1" movie_name="$2" movie_year="$3"
 
-  response=$(curl -sG "https://api.themoviedb.org/3/search/movie" \
+  response=$(curl --silent --get "https://api.themoviedb.org/3/search/movie" \
     --data-urlencode "api_key=${api_key}" \
     --data-urlencode "query=${movie_name}" \
     --data-urlencode "year=${movie_year}" \
     --data-urlencode "include_adult=false" \
     --data-urlencode "language=en-US" \
     --data-urlencode "page=1")
+
+  api_err=$(echo "$response" | jq -r 'select(.success == false) | .status_message')
+  [[ -n "$api_err" ]] && die "TMDB API Error: $api_err"
+
+  [[ $(echo "$response" | jq '.results | length') -eq 0 ]] && die "No movies found for '$movie_name'."
 
   # sort the array by .vote_count and extract 4 fields from each item - id, title, release date, overview and pass this to fzf
   selection=$(echo "$response" | jq -r '
@@ -73,8 +78,7 @@ get_tmdb_id() {
     ' | fzf --header "Select Movie (Sorted by Votes): Movie Name | Year | Description" \
     --delimiter ' \| ' \
     --with-nth "2.." \
-    --preview-window=hidden) ||
-    return 1
+    --preview-window=hidden) || die "No movie selected."
 
   echo "$selection" | awk -F ' \\| ' '{print $1}'
 }
@@ -82,11 +86,17 @@ get_tmdb_id() {
 get_sub_url() {
   local api_key="$1" tmdb_id="$2" response selection
 
-  response=$(curl -sG "https://api.subdl.com/api/v1/subtitles" \
+  response=$(curl --silent --get "https://api.subdl.com/api/v1/subtitles" \
     --data-urlencode "api_key=$api_key" \
     --data-urlencode "tmdb_id=$tmdb_id" \
     --data-urlencode "type=movie" \
     --data-urlencode "languages=EN")
+
+  api_err=$(echo "$response" | jq -r 'select(.status == false) | .error')
+  [[ -n "$api_err" && "$api_err" != "null" ]] && die "SubDL API Error: $api_err"
+
+  sub_count=$(echo "$response" | jq '.subtitles | length')
+  [[ "$sub_count" -eq 0 ]] && die "No subtitles found for this movie (TMDB ID: $tmdb_id)."
 
   # from the subtitles array, extract 4 items - download url, name, language, subdl page url, author and pass this to fzf
   selection=$(echo "$response" | jq -r '
@@ -104,7 +114,7 @@ get_sub_url() {
   ' | fzf -m --header "Select Subtitle: Release | Language | Page | Author" \
     --delimiter ' \| ' \
     --with-nth "2.." \
-    --preview-window=hidden) || return 1
+    --preview-window=hidden) || die "No subtitle selected."
 
   echo "$selection" | awk -F ' \\| ' '{print "https://dl.subdl.com" $1}'
 }
@@ -124,8 +134,8 @@ IFS="|" read -r movie_name movie_year <<<"$(parse_movie "$INPUT_MOVIE")"
 
 [[ -n "$MOVIE_YEAR" ]] || MOVIE_YEAR="$movie_year"
 
-tmdb_id=$(get_tmdb_id "$TMDB_API_KEY" "$movie_name" "$MOVIE_YEAR") || die "No selection made."
+tmdb_id=$(get_tmdb_id "$TMDB_API_KEY" "$movie_name" "$MOVIE_YEAR") || exit 1
 
-subdl_url=$(get_sub_url "$SUBDL_API_KEY" "$tmdb_id") || die "No subtitle selected."
+subdl_url=$(get_sub_url "$SUBDL_API_KEY" "$tmdb_id") || exit 1
 
 download_subs "$subdl_url" "$DEST_DIR"
